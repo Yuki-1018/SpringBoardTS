@@ -8,7 +8,7 @@ SpringBoardTweak_FILES = Tweak.x
 SpringBoardTweak_CFLAGS = -fobjc-arc
 SpringBoardTweak_INSTALL_PATH = /Applications/SpringBoardTS.app
 SpringBoardTweak_FRAMEWORKS = UIKit
-SpringBoardTweak_PRIVATE_FRAMEWORKS = CommonUtilities UIKitServices WatchdogClient
+SpringBoardTweak_PRIVATE_FRAMEWORKS = CommonUtilities UIKitServices WatchdogClient FrontBoard
 # CommonUtilities UIKitServices SpringBoard ToneLibrary WatchdogClient
 include $(THEOS_MAKE_PATH)/tweak.mk
 

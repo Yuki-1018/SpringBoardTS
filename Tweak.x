@@ -8,20 +8,63 @@
 #include <dispatch/dispatch.h>
 #import <objc/runtime.h>
 
-/*
-%hook BSXPCServiceConnection
--(void)_connection_handleInvalidateMessage:(id)arg1 withHandoff:(id)arg2 {
+@interface FBScene : NSObject
+- (NSString *)identifier;
+@end
+
+@interface FBSScene : NSObject
+- (NSString *)identifier;
+- (id)identity;
+- (id)identityToken;
+@end
+
+@interface UIMutableApplicationSceneSettings : NSObject
+- (void)setLevel:(CGFloat)level;
+@end
+
+@interface UIApplicationSceneSettings : NSObject
+- (instancetype)initWithSettings:(id)s;
+- (UIMutableApplicationSceneSettings *)mutableCopy;
+- (CGFloat)level;
+@end
+
+@interface UIWindowScene(private)
+- (FBSScene *)_scene;
+@end
+
+// FIXME: hack to force UIWindows show up. At the moment, none of windows managed by SBWindowScene shows up, so we force them to use UITextEffectsWindow's WindowScene instead
+__attribute__((constructor)) static void construct() {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        NSArray *array = [[UIApplication sharedApplication] connectedScenes].allObjects;
+        UIWindowScene *hackScene, *sbScene;
+        for (UIWindowScene *scene in array) {
+            NSString *identifier = scene._scene.identifier;
+            if ([identifier hasSuffix:@"-default"]) {
+                hackScene = scene;
+            } else if ([scene isKindOfClass:NSClassFromString(@"SBWindowScene")]) {
+                sbScene = scene;
+            }
+        }
+        for (UIWindow *window in [(UIWindowScene *)sbScene windows]) {
+            window.windowScene = hackScene;
+        }
+    });
+}
+
+%hook UIScenePresentationBinder
+- (void)addScene:(FBScene *)scene {
+    NSLog(@"Refused to add scene: %@", scene);
 }
 %end
-*/
 
 // prevent backboardd crashes
 %hook BKSSystemShellService
+
 - (void)setCollectiveWatchdogPingBlock:(id)block {}
 %end
 
 %hook SpringBoard
-// skip initializing notification center
+// skip initializing Notification Center
 - (void)_startBulletinBoardServer {}
 
 - (UISceneConfiguration *)application:(UIApplication *)application 

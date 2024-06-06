@@ -1,0 +1,80 @@
+// Previously tested hooks that didn't work, here for later reference.
+
+/*
+%hook BSXPCServiceConnection
+-(void)_connection_handleInvalidateMessage:(id)arg1 withHandoff:(id)arg2 {
+}
+%end
+*/
+
+/*
+void FBSystemShellInitialize(id block);
+%hookf(void, FBSystemShellInitialize, id block) {
+    // becomes evil
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    class_setSuperclass(NSClassFromString(@"SpringBoard"), NSClassFromString(@"UIApplication"));
+#pragma clang diagnostic pop
+    NSLog(@"Refused to init system shell");
+}
+*/
+
+/*
+%hook SBMainDisplayRootWindowScenePresentationBinder
++ (id)sharedInstance {
+    return nil;
+}
+%end
+*/
+
+/*
+%hook CSCoverSheetViewController
+- (void)updateStatusBarForLockScreenComeback {
+}
+%end
+
+%hook FBInterfaceOrientationService
++ (id)sharedInstance {
+    return nil;
+}
+%end
+
+%hook SBHardwareButtonService
++ (id)sharedInstance {
+    return nil;
+}
+%end
+
+%hook _UISystemGestureManager
++ (id)sharedInstance {
+    return nil;
+}
+%end
+*/
+
+/*
+static id level1;
+%hook FBSScene
+- (id)_initWithUpdater:(id)x2 identityToken:(id)x3 identity:(id)x4 specification:(id)x5 settings:(UIApplicationSceneSettings *)x6 initialClientSettings:(id)x7 {
+    if (x6.level == 1) {
+        return level1 = %orig;
+    } else if (x6.level < 1) {
+        return level1;
+    } else {
+        return %orig;
+    }
+}
+%end
+*/
+
+/*
+static id hackScene;
+%hook UIScene
++ (id)_sceneForFBSScene:(FBSScene *)fbsScene create:(BOOL)x3 withSession:(id)session connectionOptions:(id)options {
+    if ([fbsScene.identifier hasSuffix:@"-default"]) {
+        return hackScene = %orig;
+    }
+    return %orig;
+}
+%end
+*/

@@ -91,8 +91,10 @@
 			<dict/>
 		</dict>
 	</dict>
+<!--
 	<key>com.apple.assertiond.system-shell</key>
 	<true/>
+-->
 	<key>com.apple.assistant.announcement_state</key>
 	<true/>
 	<key>com.apple.assistant.client</key>
@@ -808,8 +810,10 @@
 	<true/>
 	<key>com.apple.private.wallpaperkit.service.migration</key>
 	<true/>
+<!--
 	<key>com.apple.private.xpc.launchd.app-server</key>
 	<true/>
+-->
 	<key>com.apple.proactive.ActionPrediction.predictions</key>
 	<true/>
 	<key>com.apple.proactive.AppPrediction.predictions</key>
