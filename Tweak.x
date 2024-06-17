@@ -33,7 +33,7 @@
 @end
 
 // FIXME: hack to force UIWindows show up. At the moment, none of windows managed by SBWindowScene shows up, so we force them to use UITextEffectsWindow's WindowScene instead
-__attribute__((constructor)) static void construct() {
+%ctor {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
         NSArray *array = [[UIApplication sharedApplication] connectedScenes].allObjects;
         UIWindowScene *hackScene, *sbScene;
