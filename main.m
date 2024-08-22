@@ -6,13 +6,10 @@
 #include <spawn.h>
 
 int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
-int csops_audittoken(pid_t pid, unsigned int ops, void * useraddr, size_t usersize, audit_token_t * token);
-bool os_variant_has_internal_content(const char* subsystem);
 int ptrace(int, int, int, int);
 uint32_t SecTaskGetCodeSignStatus();
 
-int (*orig_csops)(pid_t pid, unsigned int  ops, void * useraddr, size_t usersize);
-int (*orig_csops_audittoken)(pid_t pid, unsigned int  ops, void * useraddr, size_t usersize, audit_token_t * token);
+void redirectFunction(void *patchAddr, void *target);
 
 // JIT
 #define CS_DEBUGGED 0x10000000
@@ -27,10 +24,6 @@ static int isJITEnabled() {
 
 uint32_t hooked_SecTaskGetCodeSignStatus() {
     return 0x36803809; // CS_PLATFORM_BINARY
-}
-
-bool hooked_os_variant_has_internal_content(const char* subsystem) {
-	 return true;
 }
 
 int (*SBSystemAppMain)(int argc, char *argv[], char *envp[]);
@@ -51,16 +44,15 @@ int main(int argc, char *argv[], char *envp[]) {
         }
     }
 
-    assert(isJITEnabled());
-    MSHookFunction(&SecTaskGetCodeSignStatus, &hooked_SecTaskGetCodeSignStatus, NULL);
-    MSHookFunction(&os_variant_has_internal_content, &hooked_os_variant_has_internal_content, NULL);
+    //assert(isJITEnabled());
+    redirectFunction((void *)SecTaskGetCodeSignStatus, (void *)hooked_SecTaskGetCodeSignStatus);
 
-    [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"SBDontLockAfterCrash"];
+    //[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"SBDontLockAfterCrash"];
     void *handle = dlopen("/System/Library/PrivateFrameworks/SpringBoard.framework/SpringBoard", RTLD_GLOBAL);
 
     void *tweakHandle = dlopen("@executable_path/SpringBoardTweak.dylib", RTLD_GLOBAL|RTLD_NOW);
     if (!tweakHandle) {
-        //[@(dlerror()) writeToFile:@"/tmp/AAAAA.txt" atomically:YES];
+        [@(dlerror()) writeToFile:@"/tmp/AAAAA.txt" atomically:YES];
         abort();
     }
 

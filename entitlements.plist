@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>application-identifier</key>
-	<string>com.apple.springboard</string>
+	<string>com.apple.springboardts</string>
 	<key>aps-connection-initiate</key>
 	<true/>
 	<key>backupd-connection-initiate</key>
@@ -91,10 +91,10 @@
 			<dict/>
 		</dict>
 	</dict>
-<!--
+
 	<key>com.apple.assertiond.system-shell</key>
 	<true/>
--->
+
 	<key>com.apple.assistant.announcement_state</key>
 	<true/>
 	<key>com.apple.assistant.client</key>
@@ -198,7 +198,7 @@
 	<key>com.apple.developer.homekit</key>
 	<true/>
 	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
-	<string>com.apple.springboard</string>
+	<string>com.apple.springboardts</string>
 	<key>com.apple.duet.activityscheduler.allow</key>
 	<true/>
 	<key>com.apple.duet.expertcenter.consumer</key>
@@ -810,10 +810,8 @@
 	<true/>
 	<key>com.apple.private.wallpaperkit.service.migration</key>
 	<true/>
-<!--
 	<key>com.apple.private.xpc.launchd.app-server</key>
 	<true/>
--->
 	<key>com.apple.proactive.ActionPrediction.predictions</key>
 	<true/>
 	<key>com.apple.proactive.AppPrediction.predictions</key>
@@ -849,6 +847,8 @@
 	<key>com.apple.rootless.storage.proactivepredictions</key>
 	<true/>
 	<key>com.apple.runningboard.assertions.frontboard</key>
+	<true/>
+	<key>com.apple.runningboard.assertions.frontboardts</key>
 	<true/>
 	<key>com.apple.runningboard.hereditarygrantoriginator</key>
 	<true/>
