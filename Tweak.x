@@ -258,6 +258,13 @@ typedef void (^LSBundleProxyHandler)(LSBundleProxy *proxy, BOOL *stop);
 }
 %end
 
+// returns success for any passcode
+%hook SBFUserAuthenticationController
+- (long long)_evaluateAuthenticationAttempt:(id)arg1 outError:(id *)arg2 {
+    return 2;
+}
+%end
+
 // iOS 18
 %hook SBBacklightController
 + (instancetype)_sharedInstanceCreateIfNeeded:(BOOL)arg1 {
