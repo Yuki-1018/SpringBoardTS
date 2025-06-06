@@ -4,59 +4,70 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <spawn.h>
+#include "fishhook/fishhook.h"
+#import "IgnoredAssertionHandler.h"
 
-int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
-int ptrace(int, int, int, int);
-uint32_t SecTaskGetCodeSignStatus();
+extern void PerformHook(void* _target, void* _replacement, void** orig);
 
-void redirectFunction(void *patchAddr, void *target);
+typedef char name_t[128];
+extern kern_return_t bootstrap_check_in(mach_port_t bp, const name_t service_name, mach_port_t *sp);
+extern bool os_variant_has_internal_content(const char* subsystem);
 
-// JIT
-#define CS_DEBUGGED 0x10000000
-#define PT_TRACE_ME 0
-#define PT_DETACH 11
-int fork();
-static int isJITEnabled() {
-    int flags;
-    csops(getpid(), 0, &flags, sizeof(flags));
-    return (flags & CS_DEBUGGED) != 0;
+bool hook_os_variant_has_internal_content(const char* subsystem) {
+	 return true;
 }
 
-uint32_t hooked_SecTaskGetCodeSignStatus() {
-    return 0x36803809; // CS_PLATFORM_BINARY
+void* hook_exit(int status) {
+    NSLog(@"Ignored exit(%d)", status);
+    // do not exit under any circumstances
+    return NULL;
+}
+
+kern_return_t (*orig_bootstrap_check_in)(mach_port_t bp, const name_t service_name, mach_port_t *sp);
+kern_return_t hook_bootstrap_check_in(mach_port_t bp, const name_t service_name, mach_port_t *sp) {
+    orig_bootstrap_check_in(bp, service_name, sp);
+    return 0; // regardless of errors
+}
+
+xpc_connection_t (*orig_xpc_connection_create_mach_service)(const char *name, dispatch_queue_t targetq, uint64_t flags);
+xpc_connection_t hook_xpc_connection_create_mach_service(const char *name, dispatch_queue_t targetq, uint64_t flags) {
+    NSLog(@"xpc_connection_create_mach_service(%s, %@, %llu)", name, targetq, flags);
+    if (flags == XPC_CONNECTION_MACH_SERVICE_LISTENER) {
+        NSLog(@"Changing flag for Mach Service: %s", name);
+        // this is just to prevent it from crashing
+        // com.apple.frontboard.systemappservices
+        // com.apple.siri.activation.service
+        return orig_xpc_connection_create_mach_service(name, targetq, 0);
+    }
+    return orig_xpc_connection_create_mach_service(name, targetq, flags);
 }
 
 int (*SBSystemAppMain)(int argc, char *argv[], char *envp[]);
-
 int main(int argc, char *argv[], char *envp[]) {
-    if (!isJITEnabled() && argc == 2) {
-        int ret = ptrace(PT_TRACE_ME, 0, 0, 0);
-        return ret;
-    } else if (!isJITEnabled()) {
-        int pid;
-        int ret = posix_spawnp(&pid, argv[0], NULL, NULL, (char *[]){argv[0], "", NULL}, envp);
-        if (ret == 0) {
-            // Cleanup child process
-            waitpid(pid, NULL, WUNTRACED);
-            ptrace(PT_DETACH, pid, 0, 0);
-            kill(pid, SIGTERM);
-            wait(NULL);
-        }
-    }
-
-    //assert(isJITEnabled());
-    redirectFunction((void *)SecTaskGetCodeSignStatus, (void *)hooked_SecTaskGetCodeSignStatus);
-
-    //[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"SBDontLockAfterCrash"];
+    void *xpc_connection_create_mach_service_ = dlsym(RTLD_DEFAULT, "xpc_connection_create_mach_service");
+    assert(xpc_connection_create_mach_service_ != NULL);
+    PerformHook(os_variant_has_internal_content, hook_os_variant_has_internal_content, NULL);
+    //PerformHook(bootstrap_check_in, hook_bootstrap_check_in, &orig_bootstrap_check_in);
+    //PerformHook(xpc_connection_create_mach_service_, hook_xpc_connection_create_mach_service, &orig_xpc_connection_create_mach_service);
+    
+   //[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"SBDontLockAfterCrash"];
+    dispatch_sync(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        // Ignore assertion handler to prevent crashes from SpringBoardHome
+        [NSThread.currentThread.threadDictionary setObject:[IgnoredAssertionHandler new] forKey:NSAssertionHandlerKey];
+        dlopen("/System/Library/PrivateFrameworks/SpringBoardHome.framework/SpringBoardHome", RTLD_GLOBAL);
+    });
     void *handle = dlopen("/System/Library/PrivateFrameworks/SpringBoard.framework/SpringBoard", RTLD_GLOBAL);
 
     void *tweakHandle = dlopen("@executable_path/SpringBoardTweak.dylib", RTLD_GLOBAL|RTLD_NOW);
     if (!tweakHandle) {
-        [@(dlerror()) writeToFile:@"/tmp/AAAAA.txt" atomically:YES];
+        [@(dlerror()) writeToFile:[@(getenv("LC_HOME_PATH")) stringByAppendingPathComponent:@"Documents/SpringBoardLC.txt"] atomically:YES];
         abort();
     }
 
-    //dlopen("/var/jb/usr/lib/TweakInject/FLEXing.dylib", RTLD_GLOBAL|RTLD_NOW);
+    dlopen("/var/jb/usr/lib/TweakInject/FLEXing.dylib", RTLD_GLOBAL|RTLD_NOW);
+    
+    setenv("BSMachServiceAliases", "com.apple.frontboard.systemappservices:com.troll.frontboard.systemappservices", 1);
+    
     SBSystemAppMain = dlsym(handle, "SBSystemAppMain");
 	 return SBSystemAppMain(argc, argv, envp);
 }

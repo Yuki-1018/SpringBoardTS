@@ -8,6 +8,10 @@
 #include <dispatch/dispatch.h>
 #import <objc/runtime.h>
 
+@interface LCSharedUtils : NSObject
++ (NSURL *)appGroupPath;
+@end
+
 @interface FBScene : NSObject
 - (NSString *)identifier;
 @end
@@ -32,54 +36,37 @@
 - (FBSScene *)_scene;
 @end
 
-// FIXME: hack to force UIWindows show up. At the moment, none of windows managed by SBWindowScene shows up, so we force them to use UITextEffectsWindow's WindowScene instead
-%ctor {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-        NSArray *array = [[UIApplication sharedApplication] connectedScenes].allObjects;
-        UIWindowScene *hackScene, *sbScene;
-        for (UIWindowScene *scene in array) {
-            NSString *identifier = scene._scene.identifier;
-            if ([identifier hasSuffix:@"-default"]) {
-                hackScene = scene;
-            } else if ([scene isKindOfClass:NSClassFromString(@"SBWindowScene")]) {
-                sbScene = scene;
-            }
-        }
-        for (UIWindow *window in [(UIWindowScene *)sbScene windows]) {
-            window.windowScene = hackScene;
-        }
-    });
-}
-
-%hook UIScenePresentationBinder
-- (void)addScene:(FBScene *)scene {
-    NSLog(@"Refused to add scene: %@", scene);
-}
-%end
-
-// prevent backboardd crashes
 %hook BKSSystemShellService
-
-- (void)setCollectiveWatchdogPingBlock:(id)block {}
+- (instancetype)initWithConfigurator:(id)configurator {
+    // skip init to avoid calling exit() and watchdog
+    return nil;
+}
 %end
 
 %hook SpringBoard
 // skip initializing Notification Center
 - (void)_startBulletinBoardServer {}
 
-- (UISceneConfiguration *)application:(UIApplication *)application 
+- (UISceneConfiguration *)application:(UIApplication *)application
 configurationForConnectingSceneSession:(UISceneSession *)connectingSceneSession options:(UISceneConnectionOptions *)options {
     if (connectingSceneSession.role == UIWindowSceneSessionRoleApplication) {
-        static BOOL roleAppInited = NO;
-        if (!roleAppInited) {
-            roleAppInited = YES;
+        static NSUInteger numRoleApps = 0;
+        if (numRoleApps++ != 1) {
             return %orig;
         } else {
-            // SpringBoard as daemon doesn't call this twice, but SpringBoard as app does this and trips an assertion inside
-            return nil;
+            // If we reach here, it means that this is the second UIWindowSceneSessionRoleApplication being created
+            // init a scene to display SpringBoard's programmatically created scenes
+            UISceneConfiguration *config = [[UISceneConfiguration alloc] initWithName:@"Default Configuration" sessionRole:connectingSceneSession.role];
+            config.delegateClass = NSClassFromString(@"SBLCSceneDelegate");
+            return config;
         }
     }
     return %orig;
+}
+
+// iOS 18
+- (void)_prepareBacklightServices {
+    // do nothing
 }
 %end
 
@@ -95,56 +82,206 @@ configurationForConnectingSceneSession:(UISceneSession *)connectingSceneSession 
 }
 %end
 
-// Skip watchdog init
-void wd_endpoint_activate();
-%hookf(void, wd_endpoint_activate) {};
-
-// Optional if process name = SpringBoard
-BOOL _UIApplicationProcessIsSpringBoard();
-%hookf(BOOL, _UIApplicationProcessIsSpringBoard) {
-    return YES;
+%hook SWSystemSleepMonitorProvider
+- (void)registerForSystemPowerOnQueue:(id)queue withDelegate:(id)delegate {
+    // do nothing
 }
+%end
 
-typedef char name_t[128];
-
-kern_return_t bootstrap_check_in(mach_port_t bp, const name_t service_name, mach_port_t *sp);
-%hookf(kern_return_t, bootstrap_check_in, mach_port_t bp, const name_t service_name, mach_port_t *sp) {
-    %orig;
-    return 0; // regardless of errors
+%hook _UIEventDeferringManager
++ (void)setSystemShellBehaviorDelegate:(id)delegate {
+    // do nothing
 }
+%end
 
-%hookf(xpc_connection_t, xpc_connection_create_mach_service, const char *name, dispatch_queue_t targetq, uint64_t flags) {
-    NSLog(@"xpc_connection_create_mach_service(%s, %@, %llu)", name, targetq, flags);
-    if (flags == XPC_CONNECTION_MACH_SERVICE_LISTENER) {
-#if 0
-        char name_mod[0x1000];
-        strcpy(name_mod, name);
-        if (!strncmp(name_mod, "com.apple", 9)) {
-            strncpy(name_mod, "com.troll", 9);
+%hook PBUIPosterViewController
+- (instancetype)init {
+    return nil;
+}
+%end
+
+// FIXME
+/*
+%hook SBApplicationController
+- (void)_loadApplications:(id)apps remove:(id)remove {
+    // do nothing for now
+}
+%end
+*/
+
+%hook BKSTouchDeliveryObservationService
+- (void)_connectToTouchDeliveryService {
+    // do nothing
+}
+%end
+
+%hook _UIEventDeferringManager
+- (void)setNeedsRemoteEventDeferringRuleComparisonInEnvironments:(id)environments forBehaviorDelegate:(id)delegate withReason:(NSString *)reason {
+    // do nothing
+}
+%end
+
+%hook SASPresentationConnectionListener
++ (instancetype)listener {
+    return nil;
+}
+%end
+
+%hook SASSignalConnectionListener
++ (instancetype)listener {
+    return nil;
+}
+%end
+
+%hook FBSystemShellInitializationOptions
+- (id)independentWatchdogPortName {
+    // Skip watchdog init
+    return nil;
+}
+%end
+
+%hook SBUIBiometricResource
+- (void)_reevaluateFaceDetection {
+    // do nothing
+}
+%end
+
+%hook FBSystemShell
+- (void)_setSystemIdleSleepDisabled:(BOOL)disabled forReason:(id)reason {
+    // do nothing
+}
+%end
+
+%hook BiometricKitXPCClient
+- (int)initializeConnection {
+    return 0;
+}
+%end
+
+%hook SBSetupManager
+- (BOOL)_setSetupRequiredReason:(NSUInteger)reason {
+    // skip setup
+    return NO;
+}
+%end
+
+/*
+reverse engineering options
+
+ id a0 = (id)[[[LSApplicationRecord enumeratorWithOptions:0b0] allObjects] mutableCopy]; id a1 = (id)[[LSApplicationRecord enumeratorWithOptions:0b1] allObjects]; (void)[a0 removeObjectsInArray:a1]; (id)[a0 description]
+ -> user installed apps
+ 
+ so options:
+ 0: all apps
+ 1<<0: system apps only
+ 1<<1: unknown
+ 1<<2: unknown
+ 1<<3: unknown
+ 1<<4: unknown
+ 1<<5: unknown
+ 1<<6: empty array
+ 1<<7: unknown
+ 
+enumerate all bundles: (~*(_DWORD *)(a1 + 96) & 0xD0LL) == 0;
+0b11010000
+ 
+*/
+
+@interface LSApplicationRecord : NSObject
++ (id)vs_applicationRecordWithBundleURL:(NSURL *)bundleURL;
+@end
+
+/*
+%hook LSApplicationRecord
++ (NSEnumerator *)enumeratorWithOptions:(NSUInteger)options {
+    static NSMutableArray *installedApps = nil;
+    if (!installedApps) {
+        installedApps = [NSMutableArray array];
+        NSURL *docPath = [NSURL fileURLWithPath:[NSString stringWithFormat:@"%s/Documents/Applications", getenv("LC_HOME_PATH")]];
+        NSURL *appGroupPath = [[NSClassFromString(@"LCSharedUtils") appGroupPath] URLByAppendingPathComponent:@"LiveContainer/Applications"];
+        
+        NSFileManager *fileManager = [NSFileManager defaultManager];
+        NSMutableArray *apps = [fileManager contentsOfDirectoryAtURL:docPath includingPropertiesForKeys:@[NSURLIsDirectoryKey]
+            options:NSDirectoryEnumerationSkipsHiddenFiles error:nil].mutableCopy;
+        [apps addObjectsFromArray:[fileManager contentsOfDirectoryAtURL:appGroupPath includingPropertiesForKeys:@[NSURLIsDirectoryKey]
+            options:NSDirectoryEnumerationSkipsHiddenFiles error:nil]];
+        for (NSURL *url in apps) {
+            if ([url.pathExtension isEqualToString:@"app"]) {
+                // TODO: handle hidden apps?
+                LSApplicationRecord *appRecord = [LSApplicationRecord vs_applicationRecordWithBundleURL:url];
+                if (appRecord) {
+                    [installedApps addObject:appRecord];
+                }
+            }
         }
-        NSLog(@"Mach Service: %s -> %s", name, name_mod);
-        return %orig(name_mod, targetq, flags);
-#endif
-        NSLog(@"Changing flag for Mach Service: %s", name);
-        // this is just to prevent it from crashing
-        // com.apple.frontboard.systemappservices
-        // com.apple.siri.activation.service
-        return %orig(name, targetq, XPC_CONNECTION_MACH_SERVICE_PRIVILEGED);
     }
-    return %orig;
+    // TODO: handle the options
+    return installedApps.objectEnumerator;
 }
+%end
+*/
 
-// Optional if process name = SpringBoard
-NSString* CUTProcessNameForPid(int pid);
-%hookf(NSString *, CUTProcessNameForPid, int pid) {
-    if (pid == getpid()) {
-        return @"SpringBoard";
+/*
+// low-level hook of querying installed apps
+%hook _LSXPCQueryResolver
+- (void)_enumerateResolvedResultsOfQuery:(id)query XPCConnection:(id)connection withBlock:(id)block {
+
+}
+%end
+*/
+
+/*
+typedef void (^LSBundleProxyHandler)(LSBundleProxy *proxy, BOOL *stop);
+%hook LSApplicationWorkspace
+- (void)enumerateBundlesOfType:(NSUInteger)type legacySPI:(BOOL)legacySPI block:(LSBundleProxyHandler)block {
+    
+}
+%end
+*/
+
+%hook HKSPSleepStore
+- (instancetype)init {
+    // skip init sleep stuff
+    return nil;
+}
+%end
+
+@interface BSServicesConfiguration : NSObject
+- (id)domainForIdentifier:(NSString *)identifier;
+@end
+%hook BSServicesConfiguration
+- (id)domainForMachName:(NSString *)machName {
+    if([machName isEqualToString:@"com.apple.frontboard.systemappservices"] || [machName isEqualToString:@"com.troll.frontboard.systemappservices"]) {
+        return [self domainForIdentifier:@"com.apple.frontboard"];
     }
     return %orig;
 }
+%end
+
+// iOS 18
+%hook SBBacklightController
++ (instancetype)_sharedInstanceCreateIfNeeded:(BOOL)arg1 {
+    return nil;
+}
+%end
+
+%hook SBInputUISceneController
+- (id)_createInputUIScene {
+    // skip init
+    return nil;
+}
+%end
+
+//////////
+
+%hook BLSHService
++ (instancetype)sharedService {
+    NSLog(@"[Hook] BLSHService -sharedService called");
+    return nil;
+}
+%end
 
 %ctor {
-    MSImageRef image;
-image = MSGetImageByName("/System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore");
-    %init(_UIApplicationProcessIsSpringBoard = MSFindSymbol(image, "__UIApplicationProcessIsSpringBoard"));
+    //MSImageRef image = MSGetImageByName("/System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore");
+    //%init(_UIApplicationProcessIsSpringBoard = MSFindSymbol(image, "__UIApplicationProcessIsSpringBoard"));
 }
