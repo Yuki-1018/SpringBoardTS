@@ -66,8 +66,6 @@ int main(int argc, char *argv[], char *envp[]) {
 
     dlopen("/var/jb/usr/lib/TweakInject/FLEXing.dylib", RTLD_GLOBAL|RTLD_NOW);
     
-    setenv("BSMachServiceAliases", "com.apple.frontboard.systemappservices:com.troll.frontboard.systemappservices", 1);
-    
     SBSystemAppMain = dlsym(handle, "SBSystemAppMain");
 	 return SBSystemAppMain(argc, argv, envp);
 }
