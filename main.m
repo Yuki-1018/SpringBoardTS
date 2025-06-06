@@ -45,20 +45,27 @@ xpc_connection_t hook_xpc_connection_create_mach_service(const char *name, dispa
 
 int (*SBSystemAppMain)(int argc, char *argv[], char *envp[]);
 int main(int argc, char *argv[], char *envp[]) {
-    void *xpc_connection_create_mach_service_ = dlsym(RTLD_DEFAULT, "xpc_connection_create_mach_service");
-    assert(xpc_connection_create_mach_service_ != NULL);
-    PerformHook(os_variant_has_internal_content, hook_os_variant_has_internal_content, NULL);
-    //PerformHook(bootstrap_check_in, hook_bootstrap_check_in, &orig_bootstrap_check_in);
-    //PerformHook(xpc_connection_create_mach_service_, hook_xpc_connection_create_mach_service, &orig_xpc_connection_create_mach_service);
+    // Create symlinks (only works in LiveContainer)
+    NSURL *fakeSBURL = NSBundle.mainBundle.bundleURL;
+    NSURL *realSBURL = [NSURL fileURLWithPath:@"/System/Library/CoreServices/SpringBoard.app"];
+    NSArray *realSBFiles = [NSFileManager.defaultManager contentsOfDirectoryAtURL:realSBURL includingPropertiesForKeys:@[] options:NSDirectoryEnumerationSkipsHiddenFiles error:nil];
+    for(NSURL *file in realSBFiles) {
+        [NSFileManager.defaultManager createSymbolicLinkAtURL:[fakeSBURL URLByAppendingPathComponent:file.lastPathComponent] withDestinationURL:file error:nil];
+    }
     
-   //[NSUserDefaults.standardUserDefaults setBool:YES forKey:@"SBDontLockAfterCrash"];
-    dispatch_sync(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        // Ignore assertion handler to prevent crashes from SpringBoardHome
-        [NSThread.currentThread.threadDictionary setObject:[IgnoredAssertionHandler new] forKey:NSAssertionHandlerKey];
-        dlopen("/System/Library/PrivateFrameworks/SpringBoardHome.framework/SpringBoardHome", RTLD_GLOBAL);
-    });
+    // Ignore all assertions
+    [NSThread.currentThread.threadDictionary setObject:[IgnoredAssertionHandler new] forKey:NSAssertionHandlerKey];
+    
+    // Avoid frameworks crashing due to not being SpringBoard :)
+    PerformHook(os_variant_has_internal_content, hook_os_variant_has_internal_content, NULL);
+    dlopen("/System/Library/PrivateFrameworks/SpringBoardHome.framework/SpringBoardHome", RTLD_GLOBAL);
     void *handle = dlopen("/System/Library/PrivateFrameworks/SpringBoard.framework/SpringBoard", RTLD_GLOBAL);
-
+    
+    // Disable lock screen
+    NSUserDefaults *defaults = [[NSUserDefaults alloc] initWithSuiteName:@"com.apple.springboard"];
+    [defaults setBool:YES forKey:@"SBDontLockAfterCrash"];
+    [defaults setBool:YES forKey:@"SBDontLockEver"];
+    
     void *tweakHandle = dlopen("@executable_path/SpringBoardTweak.dylib", RTLD_GLOBAL|RTLD_NOW);
     if (!tweakHandle) {
         [@(dlerror()) writeToFile:[@(getenv("LC_HOME_PATH")) stringByAppendingPathComponent:@"Documents/SpringBoardLC.txt"] atomically:YES];

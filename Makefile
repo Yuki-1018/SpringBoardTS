@@ -32,9 +32,7 @@ $(APPLICATION_NAME)_CODESIGN_FLAGS = -Sentitlements.plist -Icom.apple.springboar
 include $(THEOS_MAKE_PATH)/application.mk
 
 before-package-sim::
-	# delete symlinks
-	@find $(THEOS_STAGING_DIR)/Applications/SpringBoard.app -maxdepth 1 -type l -delete
-	# can't use simforge now
+	@# can't use simforge now
 	@vtool -arch arm64 -set-build-version 7 14.0 14.0 -replace -output $(THEOS_STAGING_DIR)/Applications/SpringBoard.app/SpringBoard $(THEOS_STAGING_DIR)/Applications/SpringBoard.app/SpringBoard
 	@vtool -arch arm64 -set-build-version 7 14.0 14.0 -replace -output $(THEOS_STAGING_DIR)/Applications/SpringBoard.app/SpringBoardTweak.dylib $(THEOS_STAGING_DIR)/Applications/SpringBoard.app/SpringBoardTweak.dylib
 	@vtool -arch arm64 -set-build-version 7 14.0 14.0 -replace -output $(THEOS_STAGING_DIR)/Applications/SpringBoard.app/Frameworks/CydiaSubstrate.framework/CydiaSubstrate $(THEOS_STAGING_DIR)/Applications/SpringBoard.app/Frameworks/CydiaSubstrate.framework/CydiaSubstrate

@@ -76,11 +76,13 @@ configurationForConnectingSceneSession:(UISceneSession *)connectingSceneSession 
 %end
 
 // SB's implementation recursively calls this for some reason, so use UIKit's implementation instead
+/*
 %hook UISApplicationInitializationContext
 + (id)sb_embeddedDisplayDefaultContext {
     return [self performSelector:@selector(defaultContext)];
 }
 %end
+*/
 
 %hook SWSystemSleepMonitorProvider
 - (void)registerForSystemPowerOnQueue:(id)queue withDelegate:(id)delegate {
@@ -265,6 +267,13 @@ typedef void (^LSBundleProxyHandler)(LSBundleProxy *proxy, BOOL *stop);
 }
 %end
 
+// disable PosterBoard route for now
+%hook CSPosterSwitcherViewController
+- (void)setAppHostConfiguring:(id)obj {
+    // do nothing
+}
+%end
+
 // iOS 18
 %hook SBBacklightController
 + (instancetype)_sharedInstanceCreateIfNeeded:(BOOL)arg1 {
@@ -285,6 +294,13 @@ typedef void (^LSBundleProxyHandler)(LSBundleProxy *proxy, BOOL *stop);
 + (instancetype)sharedService {
     NSLog(@"[Hook] BLSHService -sharedService called");
     return nil;
+}
+%end
+
+// stay unlocked
+%hook SBFUserAuthenticationController
+- (BOOL)_isUserAuthenticated {
+    return YES;
 }
 %end
 
