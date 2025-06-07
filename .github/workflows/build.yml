@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-  workflow_dispatch:
+  
 
 env:
   THEOS: ${{ github.workspace }}/theos
